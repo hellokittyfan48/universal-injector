@@ -1,51 +1,19 @@
 #include <ctime>
+#include <locale>
 #include <string>
+#include <codecvt>
+#include <fstream>
 #include <iostream>
 #include <Windows.h>
 #include <tlhelp32.h>
 #include <filesystem>
 
-using namespace std;
-
-void findDLL(string& dllName, const string& exePath) {
-    string exeDirectory = filesystem::path(exePath).parent_path().string();
-
-    for (const auto& entry : filesystem::directory_iterator(exeDirectory)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".dll") {
-            dllName = entry.path().filename().string();
-            break;
-        }
-    }
-}
-
-bool checkModules(DWORD processId, string dllName) {
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, processId);
-
-    if (hSnapshot == INVALID_HANDLE_VALUE) {
-        cerr << "[-] Failed to create snapshot" << endl;
-        return false;
-    }
-
-    MODULEENTRY32 moduleEntry;
-    moduleEntry.dwSize = sizeof(moduleEntry);
-
-    if (Module32First(hSnapshot, &moduleEntry)) {
-        do {
-            if (moduleEntry.szModule == dllName) {
-                cout << "[-] DLL already injected" << endl;
-                return true;
-            }
-        } while (Module32Next(hSnapshot, &moduleEntry));
-        return false;
-    }
-
-    CloseHandle(hSnapshot);
-}
+#include "hdr/funcs.h"
 
 int main(int argc, char* argv[]) {
-    SetConsoleTitle("GTA Injector | hellokittyfan47");
+    SetConsoleTitle("GTA Injector | hellokittyfan48");
 
-    string mark = R"(
+    std::string text = R"(
                _____ _______         _____ _   _      _ ______ _____ _______ ____  _____  
               / ____|__   __|/\     |_   _| \ | |    | |  ____/ ____|__   __/ __ \|  __ \ 
              | |  __   | |  /  \      | | |  \| |    | | |__ | |       | | | |  | | |__) |
@@ -53,42 +21,41 @@ int main(int argc, char* argv[]) {
              | |__| |  | |/ ____ \   _| |_| |\  | |__| | |___| |____   | | | |__| | | \ \ 
               \_____|  |_/_/    \_\ |_____|_| \_|\____/|______\_____|  |_|  \____/|_|  \_\
                                                                               
-                                          github.com/hellokittyfan47
+                                        github.com/hellokittyfan48
     )";
 
-    cout << mark << endl;
+    std::cout << text << std::endl;
 
-    const char* windowTitle = "Grand Theft Auto V";
-    string dllName;
+    std::string exePath = readFile();
+    const std::string process = "notepad.exe";
+
+    std::string dllName;
     DWORD procId = 0;
     char dllPath[MAX_PATH];
     bool fail = false;
-
+    std::cout << exePath;
+    startProc(exePath.c_str());
     findDLL(dllName, argv[0]);
-    GetWindowThreadProcessId(FindWindow(NULL, windowTitle), &procId);
+    procId = getProcID(process);
 
-    if (procId == 0) {
-        cout << "GTA not found, waiting 60 seconds for it to start\n";
+    while (procId == 0) {
+        std::cout << exePath;
+        std::cout << process << " not found, waiting 2s for it to start...\n";
+        procId = getProcID(process);
         clock_t start = clock();
-        while (procId == 0) {
-            GetWindowThreadProcessId(FindWindow(NULL, windowTitle), &procId);
-            if (clock() - start > 60000) {
-                break;
-            }
-            if (procId != 0) {
-                system("cls");
-                cout << mark << endl;
-                break;
-            }
+        while (clock() - start < 2000) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 
+    system("cls");
+    std::cout << text << std::endl;
 
-    cout << "----------------------------------" << endl;
-    cout << "[*] Process: " << windowTitle << endl;
-    cout << "[*] PID: " << procId << endl;
-    cout << "[*] DLL: " << dllName << endl;
-    cout << "----------------------------------" << endl;
+    std::cout << "----------------------------------" << std::endl;
+    std::cout << "[*] Process: " << process << std::endl;
+    std::cout << "[*] PID: " << procId << std::endl;
+    std::cout << "[*] DLL: " << dllName << std::endl;
+    std::cout << "----------------------------------" << std::endl;
 
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED);
 
@@ -98,43 +65,43 @@ int main(int argc, char* argv[]) {
     }
 
     if (procId == 0) {
-        cout << "[-] Failed to find PID" << endl;
-        fail = true;
-    }
-
-    if (!filesystem::exists(dllName)) {
-        cout << "[-] Failed to find DLL" << endl;
+        std::cout << "[-] Failed to find PID" << std::endl;
         fail = true;
     }
 
     if (!GetFullPathName(dllName.c_str(), MAX_PATH, dllPath, nullptr)) {
-        cout << "[-] Failed To Get Full Path" << endl;
+        std::cout << "[-] Failed To Get Full Path" << std::endl;
+        fail = true;
+    }
+
+    if (!std::filesystem::exists(dllPath)) {
+        std::cout << "[-] Failed to find DLL" << std::endl;
         fail = true;
     }
 
     HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, NULL, procId);
 
     if (!hProcess) {
-        cout << "[-] Failed To Open Process" << endl;
+        std::cout << "[-] Failed To Open Process" << std::endl;
         fail = true;
     }
 
     void* allocatedMemory = VirtualAllocEx(hProcess, nullptr, MAX_PATH, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
     if (!allocatedMemory) {
-        cout << "[-] Failed Allocating Memory" << endl;
+        std::cout << "[-] Failed Allocating Memory" << std::endl;
         fail = true;
     }
 
     if (!WriteProcessMemory(hProcess, allocatedMemory, dllPath, MAX_PATH, nullptr)) {
-        cout << "[-] Failed Writing to Memory" << endl;
+        std::cout << "[-] Failed Writing to Memory" << std::endl;
         fail = true;
     }
 
     HANDLE hThread = CreateRemoteThread(hProcess, nullptr, NULL, LPTHREAD_START_ROUTINE(LoadLibraryA), allocatedMemory, NULL, nullptr);
 
     if (!hThread) {
-        cout << "[-] Failed To Create Remote Thread" << endl;
+        std::cout << "[-] Failed To Create Remote Thread" << std::endl;
         fail = true;
     }
 
@@ -142,11 +109,11 @@ int main(int argc, char* argv[]) {
     VirtualFreeEx(hProcess, allocatedMemory, NULL, MEM_RELEASE);
 
     if (fail) {
-        cout << "[-] Failed to inject DLL" << endl;
+        std::cout << "[-] Failed to inject DLL" << std::endl;
     }
     else {
         SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_GREEN);
-        cout << "[+] DLL Injected Sucessfully" << endl;
+        std::cout << "[+] DLL Injected Sucessfully" << std::endl;
     }
 
     system("pause");
