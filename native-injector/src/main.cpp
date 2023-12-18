@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
     std::cout << text << std::endl;
 
     std::string exePath = readFile();
-    const std::string process = "notepad.exe";
+    const std::string process = exeFromPath(exePath);
 
     std::string dllName;
     DWORD procId = 0;

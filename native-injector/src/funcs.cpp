@@ -83,6 +83,17 @@ std::string openExeDialog() {
     }
 }
 
+std::string exeFromPath(const std::string& fullPath) {
+    size_t lastBackslashPos = fullPath.find_last_of('\\');
+
+    if (lastBackslashPos != std::string::npos) {
+        return fullPath.substr(lastBackslashPos + 1);
+    }
+    else {
+        MessageBox(NULL, "Invalid path provided", "Invalid path", NULL);
+    }
+}
+
 void startProc(LPCSTR exePath) {
     PROCESS_INFORMATION pi = (PROCESS_INFORMATION)malloc(sizeof(PROCESS_INFORMATION));
     STARTUPINFO si = { sizeof(si) };
